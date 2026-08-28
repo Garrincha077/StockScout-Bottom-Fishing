@@ -1,0 +1,10 @@
+.bf-owner{position:relative}
+.bf-owner-popover{position:absolute;right:0;top:calc(100% + 7px);z-index:80;display:grid;gap:8px;width:min(340px,calc(100vw - 24px));padding:13px;border:1px solid #294961;border-radius:11px;background:#071522;box-shadow:0 18px 55px #000b;text-align:left}
+.bf-owner-popover p{margin:0;color:#7890a4;font-size:10px;line-height:1.45}
+.bf-owner-popover p.warn{padding:8px;border:1px solid #6a5127;border-radius:7px;background:#2a200e;color:#e9c676}
+.bf-owner-popover form,.bf-owner-popover label{display:grid;gap:5px}
+.bf-owner-popover input{min-height:40px;padding:8px;border:1px solid #29465e;border-radius:7px;background:#081925;color:#dce8f3}
+.bf-owner-popover form button,.bf-owner-popover>button{min-height:40px;padding:7px 10px;border:1px solid #29465e;border-radius:7px;background:#0a1b28;color:#aac0d2;cursor:pointer}
+.bf-owner.embedded{justify-self:center;justify-items:stretch}
+.bf-owner.embedded .bf-owner-popover{position:relative;top:auto;right:auto}
+@media(max-width:680px){.bf-owner-popover{position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));left:8px;top:auto;width:auto}.bf-owner.embedded .bf-owner-popover{position:relative;right:auto;bottom:auto;left:auto}}
