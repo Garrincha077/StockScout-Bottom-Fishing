@@ -19,6 +19,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.unified.outputs.run_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -26,6 +28,7 @@ jobs:
           node-version: "22"
           cache: npm
       - name: Verify the exact active Unified run before building
+        id: unified
         env:
           EXPECTED_RUN_ID: ${{ inputs.expected_run_id }}
         shell: bash
@@ -35,11 +38,12 @@ jobs:
             echo "Unified active run $actual does not match requested Bottom PWA run $EXPECTED_RUN_ID" >&2
             exit 1
           fi
+          echo "run_id=$actual" >> "$GITHUB_OUTPUT"
           echo "Verified Unified run: $actual" >> "$GITHUB_STEP_SUMMARY"
       - run: npm ci
       - name: Prove frontend-only contract
         env:
-          VITE_EXPECTED_RUN_ID: ${{ inputs.expected_run_id }}
+          VITE_EXPECTED_RUN_ID: ${{ steps.unified.outputs.run_id }}
         run: |
           test ! -d backend
           test ! -d api
@@ -61,5 +65,19 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
       - name: Smoke test Pages shell
+        env:
+          EXPECTED_RUN_ID: ${{ needs.build.outputs.run_id }}
         shell: bash
-        run: curl --fail --silent --show-error --retry 8 --retry-delay 5 https://garrincha077.github.io/StockScout-Bottom-Fishing/ | grep -F "StockScout Bottom Fishing"
+        run: |
+          base=https://garrincha077.github.io/StockScout-Bottom-Fishing/
+          html=$(curl --fail --silent --show-error --retry 8 --retry-delay 5 "$base")
+          printf '%s' "$html" | grep -F "StockScout Bottom Fishing"
+          asset=$(printf '%s' "$html" | sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' | head -n 1)
+          test -n "$asset"
+          case "$asset" in
+            http*) asset_url="$asset" ;;
+            /*) asset_url="https://garrincha077.github.io$asset" ;;
+            *) asset_url="$base${asset#./}" ;;
+          esac
+          curl --fail --silent --show-error --retry 8 --retry-delay 5 "$asset_url" | grep -F "$EXPECTED_RUN_ID"
+          echo "Smoke-tested Bottom PWA run: $EXPECTED_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
