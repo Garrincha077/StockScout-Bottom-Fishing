@@ -1,0 +1,25 @@
+import{useEffect,useMemo,useRef,useState}from'react'
+import{CandlestickSeries,ColorType,HistogramSeries,LineSeries,createChart}from'lightweight-charts'
+import type{ChartBar}from'./data'
+import type{Drawing}from'./owner'
+
+function weekly(rows:ChartBar[]){const result:ChartBar[]=[];for(const row of rows){const date=new Date(`${row.time}T00:00:00Z`),day=(date.getUTCDay()+6)%7;date.setUTCDate(date.getUTCDate()-day);const time=date.toISOString().slice(0,10),last=result.at(-1);if(!last||last.time!==time)result.push({...row,time});else{last.high=Math.max(last.high,row.high);last.low=Math.min(last.low,row.low);last.close=row.close;last.volume+=row.volume;last.rs=row.rs}}return result}
+const day=(value:string)=>Date.parse(`${value}T00:00:00Z`)/86_400_000
+function lineValue(points:any[],time:string){const a=points?.[0],b=points?.[1];if(!a||!b)return null;const start=day(String(a.time)),end=day(String(b.time)),at=day(time);if(![start,end,at,Number(a.price),Number(b.price)].every(Number.isFinite))return null;if(start===end)return Number(a.price);return Number(a.price)+(Number(b.price)-Number(a.price))*((at-start)/(end-start))}
+function drawingLines(drawing:Drawing,rows:ChartBar[],interval:'D'|'W'){
+  const payload=drawing.payload??{},visible=payload.version===2?payload.visibleIntervals??['daily','weekly']:['daily','weekly'];if(!visible.includes(interval==='D'?'daily':'weekly')||payload.hidden)return[]
+  const type=String(payload.type??''),points=payload.points??[],color=String(payload.style?.color??'#f0c75c'),series:Array<Array<{time:string;value:number}>>=[]
+  const add=(values:Array<{time:string;value:number}>)=>{if(values.length)series.push(values)}
+  if(['trendline','ray','horizontal'].includes(type)){const values=rows.map(row=>({time:row.time,value:type==='horizontal'?Number(points[0]?.price):lineValue(points,row.time)})).filter(item=>Number.isFinite(item.value))as Array<{time:string;value:number}>;add(values)}
+  if(type==='rectangle'){for(const point of points.slice(0,2))add(rows.map(row=>({time:row.time,value:Number(point.price)})).filter(item=>Number.isFinite(item.value)))}
+  if(type==='channel'){const base=rows.map(row=>({time:row.time,value:lineValue(points,row.time)})).filter(item=>Number.isFinite(item.value))as Array<{time:string;value:number}>;add(base);const offset=Number(points[2]?.price)-Number(points[1]?.price);if(Number.isFinite(offset))add(base.map(item=>({...item,value:item.value+offset})))}
+  if(type==='fib'){const a=Number(points[0]?.price),b=Number(points[1]?.price);for(const level of payload.fibLevels??[0,.236,.382,.5,.618,.786,1]){const value=a+(b-a)*Number(level);if(Number.isFinite(value))add(rows.map(row=>({time:row.time,value})))}}
+  return series.map(values=>({values,color}))
+}
+
+export default function Chart({bars,interval,drawings}:{bars:ChartBar[];interval:'D'|'W';drawings:Drawing[]}){
+  const ref=useRef<HTMLDivElement>(null),shell=useRef<HTMLDivElement>(null),[tooltip,setTooltip]=useState<any>(null),rows=useMemo(()=>interval==='W'?weekly(bars):bars,[bars,interval])
+  useEffect(()=>{if(!ref.current||!rows.length)return;const chart=createChart(ref.current,{autoSize:true,layout:{background:{type:ColorType.Solid,color:'#07131e'},textColor:'#8097ac',attributionLogo:false},grid:{vertLines:{color:'#13263a'},horzLines:{color:'#13263a'}},timeScale:{borderColor:'#284158'},rightPriceScale:{borderColor:'#284158'}}),candle=chart.addSeries(CandlestickSeries,{upColor:'#2add8a',downColor:'#f26976',wickUpColor:'#2add8a',wickDownColor:'#f26976',borderVisible:false}),volume=chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'',priceLineVisible:false,lastValueVisible:false});candle.setData(rows.map(row=>({time:row.time,open:row.open,high:row.high,low:row.low,close:row.close}))as any);volume.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});volume.setData(rows.map(row=>({time:row.time,value:row.volume,color:row.close>=row.open?'#2add8a35':'#f2697635'}))as any);for(const drawing of drawings)for(const line of drawingLines(drawing,rows,interval)){const series=chart.addSeries(LineSeries,{color:line.color,lineWidth:2,priceLineVisible:false,lastValueVisible:false});series.setData(line.values as any)}chart.subscribeCrosshairMove((param:any)=>{const value=param.seriesData.get(candle);setTooltip(value&&param.time?{...value,time:String(param.time),volume:param.seriesData.get(volume)?.value}:null)});chart.timeScale().fitContent();return()=>chart.remove()},[rows,interval,drawings])
+  const fullscreen=()=>shell.current&&(document.fullscreenElement?document.exitFullscreen():shell.current.requestFullscreen())
+  return<div className="bf-chart-shell" ref={shell}><button className="bf-fullscreen" onClick={fullscreen}>Fullscreen</button>{tooltip?<div className="bf-tooltip"><b>{tooltip.time}</b><span>O {tooltip.open.toFixed(2)}</span><span>H {tooltip.high.toFixed(2)}</span><span>L {tooltip.low.toFixed(2)}</span><span>C {tooltip.close.toFixed(2)}</span><span>V {Intl.NumberFormat('en',{notation:'compact'}).format(tooltip.volume)}</span></div>:null}<div className="bf-chart" ref={ref}/></div>
+}
