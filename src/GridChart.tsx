@@ -1,16 +1,49 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { CandlestickSeries, ColorType, HistogramSeries, createChart } from 'lightweight-charts'
+import { CandlestickSeries, ColorType, HistogramSeries, LineSeries, createChart } from 'lightweight-charts'
 import type { ChartBar } from './data'
 
 export type GridRange = '1Y' | '5Y'
 
+function weekly(rows: ChartBar[]) {
+  const result: ChartBar[] = []
+  for (const row of rows) {
+    const date = new Date(`${row.time}T00:00:00Z`)
+    const day = (date.getUTCDay() + 6) % 7
+    date.setUTCDate(date.getUTCDate() - day)
+    const time = date.toISOString().slice(0, 10)
+    const last = result.at(-1)
+    if (!last || last.time !== time) result.push({ ...row, time })
+    else {
+      last.high = Math.max(last.high, row.high)
+      last.low = Math.min(last.low, row.low)
+      last.close = row.close
+      last.volume += row.volume
+      last.rs = row.rs
+    }
+  }
+  return result
+}
+
+function movingAverage(rows: ChartBar[], period: number) {
+  return rows.map((row, index) => {
+    if (index + 1 < period) return null
+    const window = rows.slice(index + 1 - period, index + 1)
+    return { time: row.time, value: window.reduce((sum, item) => sum + item.close, 0) / period }
+  }).filter((item): item is { time: string; value: number } => item !== null)
+}
+
 function rangeRows(rows: ChartBar[], range: GridRange) {
-  return rows.slice(-(range === '5Y' ? 1260 : 252))
+  const source = range === '5Y' ? weekly(rows) : rows
+  return { source, visible: source.slice(-(range === '5Y' ? 260 : 252)), period: range === '5Y' ? 30 : 50 }
 }
 
 export default function GridChart({ bars, range }: { bars: ChartBar[]; range: GridRange }) {
   const ref = useRef<HTMLDivElement>(null)
-  const rows = useMemo(() => rangeRows(bars, range), [bars, range])
+  const { source, visible: rows, period } = useMemo(() => rangeRows(bars, range), [bars, range])
+  const average = useMemo(() => {
+    const visibleTimes = new Set(rows.map(row => row.time))
+    return movingAverage(source, period).filter(item => visibleTimes.has(item.time))
+  }, [source, rows, period])
 
   useEffect(() => {
     if (!ref.current || !rows.length) return
@@ -27,9 +60,11 @@ export default function GridChart({ bars, range }: { bars: ChartBar[]; range: Gr
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
     candle.setData(rows.map(row => ({ time: row.time, open: row.open, high: row.high, low: row.low, close: row.close })) as any)
     volume.setData(rows.map(row => ({ time: row.time, value: row.volume, color: row.close >= row.open ? '#2add8a45' : '#f2697645' })) as any)
+    const ma = chart.addSeries(LineSeries, { color: '#f0c75c', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: range === '5Y' ? '30W MA' : '50D MA' })
+    ma.setData(average as any)
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [rows])
+  }, [rows, average, range])
 
   return <div className="bf-grid-chart-canvas" ref={ref} aria-label={`${range} candlestick chart`} />
 }

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const gridChart = readFileSync(new URL('./GridChart.tsx', import.meta.url), 'utf8')
 
 test('screener exposes persistent table/card/chart-grid views', () => {
   assert.match(app, /type ScreenerLayout='table'\|'card'\|'grid'/)
@@ -16,6 +17,9 @@ test('screener exposes persistent table/card/chart-grid views', () => {
   assert.match(app, /function GridChartCard/)
   assert.match(app, /function GridChartLoader/)
   assert.match(app, /IntersectionObserver/)
+  assert.match(gridChart, /function weekly/)
+  assert.match(gridChart, /range === '5Y' \? 30 : 50/)
+  assert.match(gridChart, /'30W MA' : '50D MA'/)
   assert.match(styles, /\.bf-screener-grid\{display:grid/)
   assert.match(styles, /\.bf-chart-grid\{display:grid/)
   assert.match(styles, /\.bf-mini-chart\{/)
