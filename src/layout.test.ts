@@ -10,5 +10,8 @@ test('screener exposes a persistent table/grid switch', () => {
   assert.match(app, /bottom-screener-layout-v1/)
   assert.match(app, /aria-label="Screener display"/)
   assert.match(app, /className="bf-screener-grid"/)
+  assert.match(app, /function MiniChart/)
+  assert.match(app, /IntersectionObserver/)
   assert.match(styles, /\.bf-screener-grid\{display:grid/)
+  assert.match(styles, /\.bf-mini-chart\{/)
 })
