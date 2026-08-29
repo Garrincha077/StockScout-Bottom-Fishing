@@ -2,13 +2,18 @@ name: Build and deploy Bottom Fishing PWA
 on:
   push:
     branches: [main]
+  # Keep the standalone PWA aligned with the latest verified Unified
+  # activation without starting a scan. The build is frontend-only and
+  # reads the immutable run that Unified has already published.
+  schedule:
+    - cron: "15 * * * 1-5"
   workflow_dispatch:
     inputs:
       expected_run_id:
-        description: "Exact already-deployed Unified run ID"
-        required: true
+        description: "Optional exact already-deployed Unified run ID"
+        required: false
         type: string
-        default: "2026-08-25-reuse-1"
+        default: ""
 permissions:
   contents: read
   pages: write
