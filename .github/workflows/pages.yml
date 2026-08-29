@@ -6,7 +6,7 @@ on:
   # activation without starting a scan. The build is frontend-only and
   # reads the immutable run that Unified has already published.
   schedule:
-    - cron: "15 * * * 1-5"
+    - cron: "15 * * * *"
   workflow_dispatch:
     inputs:
       expected_run_id:
