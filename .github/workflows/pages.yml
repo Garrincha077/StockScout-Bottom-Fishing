@@ -74,15 +74,33 @@ jobs:
           EXPECTED_RUN_ID: ${{ needs.build.outputs.run_id }}
         shell: bash
         run: |
+          set -euo pipefail
           base=https://garrincha077.github.io/StockScout-Bottom-Fishing/
-          html=$(curl --fail --silent --show-error --retry 8 --retry-delay 5 "$base")
-          printf '%s' "$html" | grep -F "StockScout Bottom Fishing"
-          asset=$(printf '%s' "$html" | sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' | head -n 1)
-          test -n "$asset"
-          case "$asset" in
-            http*) asset_url="$asset" ;;
-            /*) asset_url="https://garrincha077.github.io$asset" ;;
-            *) asset_url="$base${asset#./}" ;;
-          esac
-          curl --fail --silent --show-error --retry 8 --retry-delay 5 "$asset_url" | grep -F "$EXPECTED_RUN_ID"
-          echo "Smoke-tested Bottom PWA run: $EXPECTED_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          html_file="$(mktemp)"
+          asset_file="$(mktemp)"
+          trap 'rm -f "$html_file" "$asset_file"' EXIT
+          # A successful Pages deployment can briefly serve the previous CDN asset.
+          # Probe exact remote bytes with bounded retries; never relax run-id equality.
+          for attempt in $(seq 1 25); do
+            if curl -fsSL --max-time 20 "$base" -o "$html_file" \
+                && grep -Fq "StockScout Bottom Fishing" "$html_file"; then
+              asset="$(sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' "$html_file" | head -n 1)"
+              if [ -n "$asset" ]; then
+                case "$asset" in
+                  http*) asset_url="$asset" ;;
+                  /*) asset_url="https://garrincha077.github.io$asset" ;;
+                  *) asset_url="$base${asset#./}" ;;
+                esac
+                if curl -fsSL --max-time 20 "$asset_url" -o "$asset_file" \
+                    && grep -Fq "$EXPECTED_RUN_ID" "$asset_file"; then
+                  echo "Smoke-tested Bottom PWA run: $EXPECTED_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+                  exit 0
+                fi
+              fi
+            fi
+            if [ "$attempt" -eq 25 ]; then
+              echo "::error::Pages shell or JS did not expose Unified run $EXPECTED_RUN_ID after 25 checks" >&2
+              exit 1
+            fi
+            sleep 5
+          done
