@@ -92,7 +92,7 @@ jobs:
                   *) asset_url="$base${asset#./}" ;;
                 esac
                 if curl -fsSL --max-time 20 "$asset_url" -o "$asset_file" \
-                    && grep -Fq "$EXPECTED_RUN_ID" "$asset_file"; then
+                    && grep -F "$EXPECTED_RUN_ID" "$asset_file" > /dev/null; then
                   echo "Smoke-tested Bottom PWA run: $EXPECTED_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
                   exit 0
                 fi
